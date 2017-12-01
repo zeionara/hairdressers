@@ -5,9 +5,9 @@ Created on Sun Nov 26 15:40:26 2017
 @author: Zerbs
 """
 
-short_hairing_masters_quantity = 3
-fashion_hairing_masters_quantity = 5
-colouring_masters_quantity = 2
+short_hairing_masters_quantity = 2
+fashion_hairing_masters_quantity = 4
+colouring_masters_quantity = 1
 
 waiting_hall_max_fullness = 20
 
@@ -27,6 +27,14 @@ regular_client_priority_id = 2
 max_blocking_interval = 1000
 
 verbous = False
-statistics_enable = False
+statistics_enable = True
 
-number_of_clients = 100
+number_of_clients = 62750
+step_number_of_clients = 250
+
+find_optimal_number_of_clients = False
+student_parameter = 0.05
+
+minimal_accuracy = 0.05
+minimal_stability = 0.01
+number_of_considered_means = 5

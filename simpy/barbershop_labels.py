@@ -13,7 +13,6 @@ import statistics
 import entities
 from scipy import stats
 import math
-import winsound
 
 waiting_hall_fill = 0
 
@@ -53,7 +52,7 @@ def source(env, quantity):
                      generators.get_random_priority())
 
         env.process(c)
-        yield env.timeout(generators.get_interval_before_new_customer_summer())
+        yield env.timeout(generators.get_interval_before_new_customer())
     
     
 
@@ -231,7 +230,7 @@ if (constants.find_optimal_number_of_clients):
     previous_means_index = 0
     print("%20s | %20s | %22s" % ("number of clients","interval width (%)",
                                   "efficiency criterion"))
-    print("-"*68)
+    print("-"*95)
     counter = 1
     accuracy = 1
     prev_accuracy = 1
@@ -267,7 +266,6 @@ if (constants.find_optimal_number_of_clients):
         
         if counter <= constants.number_of_considered_means:
             previous_means.append(mean)
-            print("-")
         else:
             previous_means[previous_means_index] = mean
             previous_means_index = increase_index(previous_means_index, constants.number_of_considered_means)
@@ -275,10 +273,6 @@ if (constants.find_optimal_number_of_clients):
             common_accuracy = (general_interval_width+interval_width)/general_mean
             print("%20i | %20.4f | %22s" % (constants.number_of_clients, common_accuracy*100, 
                                         "%7.4f ± %7.4f" % (general_mean,general_interval_width+interval_width)))
-        if (common_accuracy > constants.minimal_accuracy):
-            winsound.Beep(500, 1000)
-        else:
-            winsound.Beep(2500, 1000)
         constants.number_of_clients += constants.step_number_of_clients
         counter += 1
     print("Optimal number of clients is %i" % (constants.number_of_clients - constants.step_number_of_clients*3))
@@ -292,63 +286,63 @@ else:
 #print(statistics.get_waiting_times(entities.cashbox_one))
 
 if (constants.statistics_enable):
-    statistics.save_histogram(statistics.serving_times, 100, 
+    statistics.show_histogram(statistics.serving_times, 100, 
                           "Serving times", "length of serving (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.cashbox_one), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.cashbox_one), 50, 
                           "Waiting time in cashbox one queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.cashbox_two), 10, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.cashbox_two), 10, 
                           "Waiting time in cashbox two queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.short_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.short_hairing_hall), 50, 
                           "Waiting time in short hairing hall queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.fashion_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.fashion_hairing_hall), 50, 
                           "Waiting time in fashion hairing hall queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.colouring_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.colouring_hall), 50, 
                           "Waiting time in colouring hall queue", "length of waiting (minutes)", "quantity of clients")
     
-    statistics.save_histogram(statistics.get_presence_times(entities.cashbox_one), 50, 
+    statistics.show_histogram(statistics.get_presence_times(entities.cashbox_one), 50, 
                           "Presence time in cashbox one", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.cashbox_two), 10, 
+    statistics.show_histogram(statistics.get_presence_times(entities.cashbox_two), 10, 
                           "Presence time in cashbox two", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.short_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_presence_times(entities.short_hairing_hall), 50, 
                           "Presence time in short hairing hall", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.fashion_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_presence_times(entities.fashion_hairing_hall), 50, 
                           "Presence time in fashion hairing hall", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.colouring_hall), 50, 
+    statistics.show_histogram(statistics.get_presence_times(entities.colouring_hall), 50, 
                           "Presence time in colouring hall queue", "length of presence (minutes)", "quantity of clients")
     
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.colouring_hall)))
+    print("Average cashbox one queue length = \t%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_one)))
+    print("Average cashbox two queue length = \t%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_two)))
+    print("Average short hairing queue length = \t%f" % numpy.mean(statistics.get_queue_lengths(entities.short_hairing_hall)))
+    print("Average fashion hairing queue length = \t%f" % numpy.mean(statistics.get_queue_lengths(entities.fashion_hairing_hall)))
+    print("Average colouring queue length = \t%f" % numpy.mean(statistics.get_queue_lengths(entities.colouring_hall)))
     
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.colouring_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.review_desk)))
+    print("Cashbox one input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_one)))
+    print("Cashbox two input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_two)))
+    print("Short hairing hall input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.short_hairing_hall)))
+    print("Fashion hairing hall input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.fashion_hairing_hall)))
+    print("Colouring hall input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.colouring_hall)))
+    print("Review desk input intensity = \t%f" % numpy.mean(statistics.get_intensity_components(entities.review_desk)))
     
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.colouring_hall)))
+    print("Average cashbox one waiting time = \t%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_one)))
+    print("Average cashbox two waiting time = \t%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_two)))
+    print("Average short hairing waiting time = \t%f" % numpy.mean(statistics.get_waiting_times(entities.short_hairing_hall)))
+    print("Average fashion hairing waiting time =\t %f" % numpy.mean(statistics.get_waiting_times(entities.fashion_hairing_hall)))
+    print("Average colouring waiting time = \t%f" % numpy.mean(statistics.get_waiting_times(entities.colouring_hall)))
     
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.colouring_hall)))
+    print("Average cashbox one presence time = \t%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_one)))
+    print("Average cashbox two presence time = \t%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_two)))
+    print("Average short hairing presence time = \t%f" % numpy.mean(statistics.get_presence_times(entities.short_hairing_hall)))
+    print("Average fashion hairing presence time = \t%f" % numpy.mean(statistics.get_presence_times(entities.fashion_hairing_hall)))
+    print("Average colouring presence time = \t%f" % numpy.mean(statistics.get_presence_times(entities.colouring_hall)))
     
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.colouring_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.review_desk)))
+    print("Average cashbox one service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_one)))
+    print("Average cashbox two service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_two)))
+    print("Average short hairing service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.short_hairing_hall)))
+    print("Average fashion hairing service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.fashion_hairing_hall)))
+    print("Average colouring service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.colouring_hall)))
+    print("Average review desk service intensity = \t%f" % numpy.mean(statistics.get_service_intensity_components(entities.review_desk)))
     
-    print("%f" % (statistics.lost_reviews/constants.number_of_clients))
-    print("%f" % (statistics.lost/constants.number_of_clients))
+    print("Losing review probability = \t%f" % (statistics.lost_reviews/constants.number_of_clients))
+    print("Losing client probability = \t%f" % (statistics.lost/constants.number_of_clients))
 #show_histogram(statistics.cashbox_queue_waiting_times[0], 100, "Cashbox one queue waiting times", "length of waiting (minutes)", "quantity of clients")
 #show_histogram(statistics.cashbox_queue_waiting_times[1], 100, "Cashbox two queue waiting times", "length of waiting (minutes)", "quantity of clients")

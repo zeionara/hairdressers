@@ -13,7 +13,7 @@ import statistics
 import entities
 from scipy import stats
 import math
-import winsound
+import queue
 
 waiting_hall_fill = 0
 
@@ -53,7 +53,7 @@ def source(env, quantity):
                      generators.get_random_priority())
 
         env.process(c)
-        yield env.timeout(generators.get_interval_before_new_customer_summer())
+        yield env.timeout(generators.get_interval_before_new_customer())
     
     
 
@@ -120,18 +120,7 @@ def update_reviews_per_day():
         statistics.reviews_per_day = 0
         statistics.last_time_writing_reviews = entities.env.now
 
-def fix_arriving(resource):
-    last_seen_input_time = statistics.get_last_seen_input_time(resource)
-    if last_seen_input_time > 0:
-        statistics.append_intensity_component(resource,1/(env.now - last_seen_input_time))
-    statistics.set_last_seen_input_time(resource, env.now)
-    
-def fix_stop_serving(resource, start_serving_time):
-    statistics.append_service_intensity_component(resource, 1/(entities.env.now - start_serving_time))
-
 def customer(env, name, cashbox, services, review_desk, customer_priority):
-    if constants.statistics_enable: 
-        fix_arriving(cashbox)
     try_print('%7.4f %s arrived' % (env.now, name))
     arriving_timestamp = env.now
     starting_serving_timestamp = env.now
@@ -140,53 +129,34 @@ def customer(env, name, cashbox, services, review_desk, customer_priority):
         results = yield req | env.timeout(generators.get_waiting_interval())
         fix_leaving_queue(cashbox, False)
         if req in results:
-            if constants.statistics_enable:
-                statistics.append_waiting_time(cashbox, env.now - arriving_timestamp)
-                handling_started = env.now
+            statistics.append_waiting_time(cashbox, env.now - arriving_timestamp)
             yield env.timeout(generators.get_service_cashbox_interval())
-            
             try_print('%7.4f %s served in cashbox' % (env.now, name))
-            if constants.statistics_enable:
-                statistics.append_presence_time(cashbox, env.now - arriving_timestamp)
-                fix_stop_serving(cashbox, handling_started)
         else:
             try_print('%7.4f %s left without serving' % (env.now, name))
             statistics.increase_lost_quantity()
             return
     
     for service in services:
-        if constants.statistics_enable: 
-            fix_arriving(service[0])
         arriving_timestamp = env.now
         try_print('%7.4f %s arrived at %s queue' % (arriving_timestamp, name, service[1]))
         fix_entering_queue(service[0], True)
         with service[0].request() as req:
             results = yield req
-            if constants.statistics_enable:
-                statistics.append_waiting_time(service[0], env.now - arriving_timestamp)
-                handling_started = env.now
+            statistics.append_waiting_time(service[0], env.now - arriving_timestamp)
             #
             fix_leaving_queue(service[0], True)
             yield env.timeout(service[2]())
-            if constants.statistics_enable:
-                statistics.append_presence_time(service[0], env.now - arriving_timestamp)
-                fix_stop_serving(service[0], handling_started)
             try_print('%7.4f %s got %s' % (env.now, name, service[1]))
     
     with review_desk.request() as req:
-        if constants.statistics_enable:
-            fix_arriving(review_desk)
-            arriving_timestamp = env.now
-        results = yield req | env.timeout(0)
+            results = yield req | env.timeout(0)
             
-        if req in results:
-            yield env.timeout(generators.get_writing_review_interval())
-            if constants.statistics_enable:
-                statistics.append_presence_time(review_desk, env.now - arriving_timestamp)
-                fix_stop_serving(review_desk, arriving_timestamp)
-            update_reviews_per_day()
-        else:
-            statistics.increase_lost_reviews_quantity()
+            if req in results:
+                yield env.timeout(generators.get_writing_review_interval())
+                update_reviews_per_day()
+            else:
+                statistics.increase_lost_reviews_quantity()
     
     try_print('%7.4f %s successfully served' % (env.now, name))
     statistics.serving_times.append(env.now - starting_serving_timestamp)
@@ -229,9 +199,10 @@ def increase_index(index, maximum):
 if (constants.find_optimal_number_of_clients):
     previous_means = []
     previous_means_index = 0
-    print("%20s | %20s | %22s" % ("number of clients","interval width (%)",
-                                  "efficiency criterion"))
-    print("-"*68)
+    print("%20s | %20s | %24s | %46s" % ("number of clients","interval width (%)",
+                                  "efficiency criterion",
+                                  "efficiency criterion considering %i last means" % constants.number_of_considered_means))
+    print("-"*119)
     counter = 1
     accuracy = 1
     prev_accuracy = 1
@@ -239,46 +210,44 @@ if (constants.find_optimal_number_of_clients):
     general_accuracy = 1
     general_interval_width = 1
     general_mean = 1
-    common_accuracy = 1
-    common_prev_accuracy = 1
-    common_prev_prev_accuracy = 1
-    while (counter < constants.number_of_considered_means) or \
-            (common_accuracy > constants.minimal_accuracy) or \
-            (common_prev_accuracy > constants.minimal_accuracy) or \
-            (common_prev_prev_accuracy > constants.minimal_accuracy):
+    while (counter < constants.number_of_considered_means) or (accuracy > constants.minimal_accuracy) or \
+            (prev_accuracy > constants.minimal_accuracy) or (prev_prev_accuracy > constants.minimal_accuracy) \
+            or (general_accuracy > constants.minimal_stability):
         
         prev_prev_accuracy = prev_accuracy
         prev_accuracy = accuracy
-        
-        common_prev_prev_accuracy = common_prev_accuracy
-        common_prev_accuracy = common_accuracy
         criterias = []
-        for i in range(5):
+        for i in range(20):
             
             env = entities.env
+        
             env.process(source(env, constants.number_of_clients))
             env.run()
+            #print(numpy.mean(statistics.waiting_hall_fills))
             criteria = get_efficiency_criteria()
             criterias.append(criteria)
+            
             reset()
 
         accuracy, mean, interval_width = get_reliability_interval_relative_width(criterias)
-        #print("-")
+        
+        #print("mean = %f" % mean)
+        #print("disp = %f" % dis)
         
         if counter <= constants.number_of_considered_means:
             previous_means.append(mean)
-            print("-")
+            print("%20i | %20.4f | %24s | %46s" % (constants.number_of_clients, accuracy*100, 
+                                        "%7.4f ± %7.4f" % (mean,interval_width),
+                                        "-"))
         else:
             previous_means[previous_means_index] = mean
             previous_means_index = increase_index(previous_means_index, constants.number_of_considered_means)
             general_accuracy, general_mean, general_interval_width = get_reliability_interval_relative_width(previous_means)
-            common_accuracy = (general_interval_width+interval_width)/general_mean
-            print("%20i | %20.4f | %22s" % (constants.number_of_clients, common_accuracy*100, 
+            print("%20i | %20.4f | %24s | %46s" % (constants.number_of_clients, accuracy*100, 
+                                        "%7.4f ± %7.4f" % (mean,interval_width),
                                         "%7.4f ± %7.4f" % (general_mean,general_interval_width+interval_width)))
-        if (common_accuracy > constants.minimal_accuracy):
-            winsound.Beep(500, 1000)
-        else:
-            winsound.Beep(2500, 1000)
+            print((general_interval_width+interval_width)/general_mean)
+        #print("Efficiency criterion = %7.4f ± %7.4f" % (mean,dis))
         constants.number_of_clients += constants.step_number_of_clients
         counter += 1
     print("Optimal number of clients is %i" % (constants.number_of_clients - constants.step_number_of_clients*3))
@@ -292,63 +261,23 @@ else:
 #print(statistics.get_waiting_times(entities.cashbox_one))
 
 if (constants.statistics_enable):
-    statistics.save_histogram(statistics.serving_times, 100, 
+    statistics.show_histogram(statistics.serving_times, 100, 
                           "Serving times", "length of serving (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.cashbox_one), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.cashbox_one), 100, 
                           "Waiting time in cashbox one queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.cashbox_two), 10, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.cashbox_two), 100, 
                           "Waiting time in cashbox two queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.short_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.short_hairing_hall), 100, 
                           "Waiting time in short hairing hall queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.fashion_hairing_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.fashion_hairing_hall), 100, 
                           "Waiting time in fashion hairing hall queue", "length of waiting (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_waiting_times(entities.colouring_hall), 50, 
+    statistics.show_histogram(statistics.get_waiting_times(entities.colouring_hall), 100, 
                           "Waiting time in colouring hall queue", "length of waiting (minutes)", "quantity of clients")
-    
-    statistics.save_histogram(statistics.get_presence_times(entities.cashbox_one), 50, 
-                          "Presence time in cashbox one", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.cashbox_two), 10, 
-                          "Presence time in cashbox two", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.short_hairing_hall), 50, 
-                          "Presence time in short hairing hall", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.fashion_hairing_hall), 50, 
-                          "Presence time in fashion hairing hall", "length of presence (minutes)", "quantity of clients")
-    statistics.save_histogram(statistics.get_presence_times(entities.colouring_hall), 50, 
-                          "Presence time in colouring hall queue", "length of presence (minutes)", "quantity of clients")
-    
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_queue_lengths(entities.colouring_hall)))
-    
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.colouring_hall)))
-    print("%f" % numpy.mean(statistics.get_intensity_components(entities.review_desk)))
-    
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_waiting_times(entities.colouring_hall)))
-    
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_presence_times(entities.colouring_hall)))
-    
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_one)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.cashbox_two)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.short_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.fashion_hairing_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.colouring_hall)))
-    print("%f" % numpy.mean(statistics.get_service_intensity_components(entities.review_desk)))
-    
-    print("%f" % (statistics.lost_reviews/constants.number_of_clients))
-    print("%f" % (statistics.lost/constants.number_of_clients))
+    print("Average cashbox one queue length = %f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_one)))
+    print("Average cashbox two queue length = %f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_two)))
+    print("Average short hairing queue length = %f" % numpy.mean(statistics.get_queue_lengths(entities.short_hairing_hall)))
+    print("Average cashbox two queue length = %f" % numpy.mean(statistics.get_queue_lengths(entities.cashbox_two)))
+    print("Losing review probability = %f" % (statistics.lost_reviews/constants.number_of_clients))
+    print("Losing probability = %f" % (statistics.lost/constants.number_of_clients))
 #show_histogram(statistics.cashbox_queue_waiting_times[0], 100, "Cashbox one queue waiting times", "length of waiting (minutes)", "quantity of clients")
 #show_histogram(statistics.cashbox_queue_waiting_times[1], 100, "Cashbox two queue waiting times", "length of waiting (minutes)", "quantity of clients")
